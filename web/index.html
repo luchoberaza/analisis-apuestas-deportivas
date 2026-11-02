@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BetLab · Análisis de Apuestas</title>
+<script>(function(){try{var t=localStorage.getItem('betlab-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Fira Sans','system-ui','sans-serif'],display:['Space Grotesk','sans-serif'],mono:['Fira Code','monospace']}}}}</script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+/* ===== Paletas ===== */
+:root[data-theme="dark"]{
+  --bg:#001427; --bg-soft:#04243f; --halo:rgba(244,213,141,.08);
+  --surface:rgba(112,141,129,.10); --surface-2:rgba(112,141,129,.17); --chip:rgba(244,213,141,.07);
+  --border:rgba(244,213,141,.15); --border-strong:rgba(244,213,141,.36);
+  --text:#e8eff0; --dim:#9fb3ad; --faint:#6f827b;
+  --primary:#bf0603; --on-primary:#fff; --secondary:#708d81; --accent:#f4d58d; --deep:#8d0801;
+}
+:root[data-theme="light"]{
+  --bg:#fdf0d5; --bg-soft:#f7e8c6; --halo:rgba(0,48,73,.06);
+  --surface:rgba(255,255,255,.72); --surface-2:rgba(255,255,255,.92); --chip:rgba(0,48,73,.05);
+  --border:rgba(0,48,73,.14); --border-strong:rgba(0,48,73,.30);
+  --text:#003049; --dim:#4f6b7a; --faint:#7a909c;
+  --primary:#003049; --on-primary:#fff; --secondary:#669bbc; --accent:#c1121f; --deep:#780000;
+}
+*{ -webkit-font-smoothing:antialiased; box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{ background:var(--bg); color:var(--text); overflow-x:hidden; }
+body::before{ content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:radial-gradient(60% 50% at 85% -5%, var(--halo), transparent 70%),radial-gradient(50% 40% at 0% 100%, var(--halo), transparent 70%); }
+.num{ font-variant-numeric:tabular-nums; font-family:'Fira Code',monospace; }
+.display{ font-family:'Space Grotesk',sans-serif; letter-spacing:-.015em; }
+.t{ color:var(--text) } .td{ color:var(--dim) } .tf{ color:var(--faint) } .acc{ color:var(--accent) } .pri{ color:var(--primary) } .sec{ color:var(--secondary) }
+
+/* superficies */
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:18px; backdrop-filter:blur(14px); transition:border-color .25s ease, transform .25s ease; }
+.card-h:hover{ border-color:var(--border-strong); transform:translateY(-2px); }
+.card2{ background:var(--surface-2); border:1px solid var(--border); border-radius:13px; }
+.chip{ background:var(--chip); border:1px solid var(--border); }
+.btnp{ background:var(--primary); color:var(--on-primary); }
+.btnp:hover{ filter:brightness(1.08); }
+.divide-soft>*+*{ border-top:1px solid var(--border); }
+
+/* selects e inputs */
+.inp{ background:var(--chip); border:1px solid var(--border); color:var(--text); border-radius:11px; }
+.inp:focus{ outline:none; border-color:var(--primary); }
+select.inp option{ background:var(--bg-soft); color:var(--text); }
+input.inp::-webkit-outer-spin-button, input.inp::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+input.inp{ -moz-appearance:textfield; appearance:textfield; }
+input.inp::placeholder{ color:var(--faint); }
+
+/* animaciones (sobrias) */
+@keyframes rise{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:translateY(0) } }
+.reveal{ animation:rise .45s ease both; }
+@keyframes grow{ from{ width:0 } }
+.grow{ animation:grow .9s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes spin{ to{ transform:rotate(360deg) } } .spin{ animation:spin 1s linear infinite; }
+.skel{ background:linear-gradient(90deg,var(--chip),var(--surface-2),var(--chip)); background-size:600px 100%; animation:skel 1.4s infinite; border-radius:13px; }
+@keyframes skel{ 0%{ background-position:-300px 0 } 100%{ background-position:300px 0 } }
+/* dropdown propio (reemplaza al select nativo) */
+.ddpanel{ background:var(--bg-soft); border:1px solid var(--border-strong); border-radius:13px; box-shadow:0 16px 40px -12px rgba(0,0,0,.6); animation:dd .16s ease both; transform-origin:top; }
+@keyframes dd{ from{ opacity:0; transform:translateY(-5px) scale(.98) } to{ opacity:1; transform:none } }
+.dditem{ transition:background .14s ease; }
+::-webkit-scrollbar{ width:8px;height:8px } ::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:6px } ::-webkit-scrollbar-track{ background:transparent }
+@media (prefers-reduced-motion:reduce){ *{ animation:none!important; transition:none!important } }
+</style>
+</head>
+<body class="font-sans">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+const API="";
+const pct=x=>(x*100).toFixed(1)+"%"; const pctR=x=>Math.round(x*100)+"%";
+const cuotaFmt=x=>Number(x).toFixed(2); const evFmt=x=>(x>=0?"+":"")+Number(x).toFixed(2);
+// semáforo de probabilidad/riesgo (armonizado, legible en ambos temas)
+const SEM={alta:"#6f9e7f",media:"#e3b860",medbaja:"#dd8a4a",baja:"#cf3b38"};
+const PERFIL={conservador:{t:"Conservador",c:SEM.alta},moderado:{t:"Moderado",c:SEM.media},agresivo:{t:"Agresivo",c:SEM.baja},muy_agresivo:{t:"Muy agresivo",c:SEM.baja}};
+const pf=p=>PERFIL[p]||PERFIL.moderado;
+const probColor=p=>p>=0.8?SEM.alta:p>=0.6?SEM.media:p>=0.45?SEM.medbaja:SEM.baja;
+const initials=n=>n.split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+const hueFrom=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h;};
+
+function Ticker({value,suffix="%",dur=900}){
+  const [v,setV]=useState(0);
+  useEffect(()=>{let raf,start;const tick=t=>{if(!start)start=t;const p=Math.min((t-start)/dur,1);setV(value*(1-Math.pow(1-p,3)));if(p<1)raf=requestAnimationFrame(tick);};raf=requestAnimationFrame(tick);return ()=>cancelAnimationFrame(raf);},[value,dur]);
+  return <span>{Math.round(v)}{suffix}</span>;
+}
+
+const I=({d,c="w-4 h-4"})=> <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
+const Bolt=p=><I {...p} d={<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>}/>;
+const Refresh=p=><I {...p} d={<><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></>}/>;
+const Cal=p=><I {...p} d={<><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>}/>;
+const Clock=p=><I {...p} d={<><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>}/>;
+const Layers=p=><I {...p} d={<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}/>;
+const Target=p=><I {...p} d={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>}/>;
+const Flame=p=><I {...p} d={<path d="M12 2s4 4 4 8a4 4 0 0 1-8 0c0-1 .5-2 .5-2S6 10 6 14a6 6 0 0 0 12 0c0-5-6-12-6-12z"/>}/>;
+const Trophy=p=><I {...p} d={<><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 4H3v2a3 3 0 0 0 3 3M18 4h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></>}/>;
+const Back=p=><I {...p} d={<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>}/>;
+const Goal=p=><I {...p} d={<><circle cx="12" cy="12" r="10"/><path d="M12 7l2.5 1.8-1 3h-3l-1-3z"/></>}/>;
+const Corner=p=><I {...p} d={<><path d="M4 4v16h16"/><path d="M4 9a11 11 0 0 1 11 11"/></>}/>;
+const Spark=p=><I {...p} d={<path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/>}/>;
+const Sun=p=><I {...p} d={<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></>}/>;
+const Moon=p=><I {...p} d={<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>}/>;
+const Chev=p=><I {...p} d={<polyline points="6 9 12 15 18 9"/>}/>;
+
+function CrestImg({nombre,flag,logo,size=44}){
+  if(flag) return <img src={flag} alt={nombre} style={{width:size,height:size*0.7,boxShadow:"0 1px 4px rgba(0,0,0,.3)"}} className="rounded object-cover"/>;
+  if(logo) return <img src={logo} alt={nombre} style={{width:size,height:size}} className="object-contain"/>;
+  const h=hueFrom(nombre);
+  return <div style={{width:size,height:size,background:`hsl(${h} 45% 42%)`}} className="rounded-lg grid place-items-center text-white font-bold display text-sm">{initials(nombre)}</div>;
+}
+const Logo=({src,size=16})=> src?<img src={src} alt="" style={{width:size,height:size}} className="object-contain shrink-0 inline-block"/>:null;
+function Ring({value,color,label,size=64}){
+  const [dg,setDg]=useState(0);
+  useEffect(()=>{let raf,start;const tk=t=>{if(!start)start=t;const p=Math.min((t-start)/700,1);setDg(value*360*(1-Math.pow(1-p,3)));if(p<1)raf=requestAnimationFrame(tk);};raf=requestAnimationFrame(tk);return ()=>cancelAnimationFrame(raf);},[value]);
+  return <div className="relative grid place-items-center" style={{width:size,height:size}}>
+    <div className="rounded-full" style={{width:size,height:size,background:`conic-gradient(${color} ${dg}deg, var(--chip) ${dg}deg)`}}></div>
+    <div className="absolute rounded-full" style={{width:size-11,height:size-11,background:"var(--bg-soft)"}}></div>
+    <div className="absolute text-center"><div className="num font-bold" style={{color,fontSize:size*0.21}}><Ticker value={value*100}/></div>{label&&<div className="tf" style={{fontSize:8,textTransform:"uppercase"}}>{label}</div>}</div>
+  </div>;
+}
+function Bar({value,color,delay=0}){return <div className="h-1.5 w-full rounded-full overflow-hidden" style={{background:"var(--chip)"}}><div className="h-full rounded-full grow" style={{width:pct(value),background:color,animationDelay:`${delay}ms`}}></div></div>;}
+function StrengthBar({pr}){
+  if(!pr)return null;
+  const segs=pr.empate!=null?[["L",pr.local,"var(--primary)"],["X",pr.empate,"var(--faint)"],["V",pr.visitante,"var(--secondary)"]]:[["L",pr.local,"var(--primary)"],["V",pr.visitante,"var(--secondary)"]];
+  return <div className="flex h-2 w-full rounded-full overflow-hidden">{segs.map(([k,v,c],i)=><div key={i} className="grow" title={`${k} ${pct(v)}`} style={{width:pct(v),background:c,animationDelay:`${i*100}ms`}}></div>)}</div>;
+}
+function ApuestaRow({a,cuotas}){
+  const c=probColor(a.prob),P=pf(a.perfil);
+  return <div className="flex items-center gap-3 py-2">
+    <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="text-[13px] t truncate">{a.seleccion}</span><span className="text-[9px] px-1.5 py-0.5 rounded-full shrink-0" style={{color:P.c,background:P.c+"1f",border:`1px solid ${P.c}55`}}>{P.t}</span>{a.valor&&<span className="text-[9px] px-1.5 py-0.5 rounded-full shrink-0" style={{color:SEM.alta,background:SEM.alta+"22",border:`1px solid ${SEM.alta}66`}}>★ valor</span>}</div>
+      <div className="mt-1.5"><Bar value={a.prob} color={c}/></div><div className="text-[10px] tf mt-1">{a.mercado}</div></div>
+    <div className="text-right shrink-0 w-16"><div className="num text-lg font-bold" style={{color:c}}>{pctR(a.prob)}</div>{cuotas&&<div className="num text-[11px] acc mt-0.5">@ {cuotaFmt(a.cuota)}</div>}</div>
+  </div>;
+}
+const Stat=({label,value,sub,color})=>(<div className="card2 px-3 py-2.5 text-center"><div className="num text-lg font-bold" style={{color:color||"var(--accent)"}}>{value}</div><div className="text-[9px] uppercase tracking-wide td mt-0.5">{label}</div>{sub&&<div className="text-[9px] tf">{sub}</div>}</div>);
+function Kpi({label,value,sub,color}){return <div className="card2 p-3.5 flex flex-col justify-center"><div className="num text-2xl font-bold" style={{color:color||"var(--accent)"}}>{value}</div><div className="text-[10px] uppercase tracking-wide td mt-0.5">{label}</div>{sub&&<div className="text-[9px] tf">{sub}</div>}</div>;}
+function FormaPills({forma,big}){
+  if(!forma||!forma.length)return <span className="text-[11px] tf">sin datos</span>;
+  const col={G:SEM.alta,E:"var(--faint)",P:SEM.baja}; const s=big?"w-7 h-7 text-[11px]":"w-6 h-6 text-[10px]";
+  return <div className="flex gap-1">{forma.map((f,i)=><span key={i} title={`${f.fecha}: ${f.local} ${f.marcador} ${f.visitante}`} className={`num ${s} grid place-items-center rounded-md font-bold text-white`} style={{background:(col[f.resultado]||"#555")+"33",border:`1px solid ${col[f.resultado]||"#555"}`}}>{f.resultado||"-"}</span>)}</div>;
+}
+
+// columna de forma de un equipo
+function FormaCol({nom,fm,flag,logo,resumen}){
+  return <div className="card2 p-3">
+    <div className="flex items-center justify-between mb-2.5"><div className="flex items-center gap-2 min-w-0"><CrestImg nombre={nom} flag={flag} logo={logo} size={24}/><span className="text-sm font-medium t truncate">{nom}</span></div><FormaPills forma={fm} big/></div>
+    {resumen&&<div className="flex gap-3 mb-2.5 text-[10px] td flex-wrap"><span>GF prom <b className="t num">{resumen.gf}</b></span><span>GC prom <b className="t num">{resumen.gc}</b></span><span>Over 2.5 <b className="t num">{resumen.over25}%</b></span></div>}
+    <div className="space-y-1">{(fm||[]).map((f,j)=><div key={j} className="flex items-center gap-2 text-[11px] td"><span className="w-[68px] shrink-0 tf">{f.fecha}</span><div className="flex-1 flex items-center gap-1.5 num t min-w-0"><Logo src={f.logo_local}/><span className="truncate">{f.local}</span><b className="acc px-0.5">{f.marcador}</b><span className="truncate">{f.visitante}</span><Logo src={f.logo_visitante}/></div><span className="num font-bold w-4 text-right shrink-0" style={{color:({G:SEM.alta,E:"var(--faint)",P:SEM.baja})[f.resultado]||"var(--faint)"}}>{f.resultado}</span></div>)}</div>
+  </div>;
+}
+
+// ===== FICHA =====
+function PartidoPage({ev,categoria,cuotas,onVolver}){
+  const [d,setD]=useState(null);
+  useEffect(()=>{window.scrollTo(0,0);let on=true;fetch(`${API}/api/partido?categoria=${categoria}&local=${encodeURIComponent(ev.local)}&visitante=${encodeURIComponent(ev.visitante)}`).then(r=>r.json()).then(x=>{if(on)setD(x);}).catch(()=>on&&setD({error:true}));return ()=>{on=false;};},[categoria,ev.local,ev.visitante]);
+  const m=d?.modelo||ev.modelo||{}; const av=d?.avanzado; const ap=d?.apuestas||ev.apuestas||[]; const conf=m.confianza;
+  const Sec=({icon,title,children,extra})=>(<section className="card p-5 reveal"><div className="flex items-center gap-2 mb-4"><span className="pri">{icon}</span><h3 className="display font-semibold t">{title}</h3>{extra}</div>{children}</section>);
+  return <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+    <button onClick={onVolver} className="flex items-center gap-2 text-sm td hover:text-[var(--text)] cursor-pointer chip px-3 py-2 rounded-xl w-fit"><Back c="w-4 h-4"/>Volver</button>
+    <div className="card p-6 reveal">
+      {ev.torneo && <div className="text-[11px] uppercase tracking-[0.18em] sec mb-4 text-center">{ev.torneo}</div>}
+      <div className="flex items-center justify-around gap-3">
+        <div className="flex flex-col items-center gap-2 flex-1"><CrestImg nombre={ev.local} flag={ev.local_flag} logo={av?.logo_local} size={74}/><div className="display font-bold t text-center text-sm sm:text-lg">{ev.local}</div></div>
+        <div className="text-center shrink-0"><div className="display tf text-2xl font-bold">VS</div><div className="num text-[11px] td mt-1 flex items-center gap-1 justify-center"><Clock c="w-3 h-3"/>{ev.hora}</div></div>
+        <div className="flex flex-col items-center gap-2 flex-1"><CrestImg nombre={ev.visitante} flag={ev.visitante_flag} logo={av?.logo_visitante} size={74}/><div className="display font-bold t text-center text-sm sm:text-lg">{ev.visitante}</div></div>
+      </div>
+    </div>
+
+    {m.probabilidades && <Sec icon={<Target c="w-5 h-5"/>} title="Pronóstico">
+      <div className="flex items-center gap-5 flex-wrap">
+        {conf&&<div className="flex flex-col items-center gap-1"><Ring value={conf.valor} color={probColor(conf.valor)} size={94}/><div className="text-[11px] td">Confianza: <b style={{color:probColor(conf.valor)}}>{conf.nivel}</b></div></div>}
+        <div className="flex-1 min-w-[240px] space-y-2">
+          {[["Gana "+ev.local,m.probabilidades.local,"var(--primary)"],...(m.probabilidades.empate!=null?[["Empate",m.probabilidades.empate,"var(--faint)"]]:[]),["Gana "+ev.visitante,m.probabilidades.visitante,"var(--secondary)"]].map(([k,v,c],i)=>
+            <div key={i} className="flex items-center gap-3"><span className="text-xs td w-28 truncate">{k}</span><div className="flex-1"><Bar value={v} color={c} delay={i*70}/></div><span className="num text-sm font-bold w-12 text-right t">{pctR(v)}</span></div>)}
+        </div>
+      </div>
+      {m.favorito && <div className="mt-4 text-sm td">Favorito del modelo: <b className="acc">{m.favorito}</b></div>}
+    </Sec>}
+
+    {m.sugerencias&&m.sugerencias.length>0&&<Sec icon={<Spark c="w-5 h-5"/>} title="Sugerencias para apostar">
+      <div className="grid sm:grid-cols-2 gap-2">{m.sugerencias.map((s,i)=>{const col={alta:SEM.alta,media:SEM.media,info:"var(--secondary)"}[s.nivel]||"var(--secondary)";return <div key={i} className="card2 px-3 py-2.5 flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{background:col}}></span><span className="text-[13px] t">{s.texto}</span></div>;})}</div>
+      <div className="text-[10px] tf mt-2">Sugerencias del modelo (no son cuotas). Verificá la cuota en tu casa antes de apostar.</div>
+    </Sec>}
+
+    <Sec icon={<Bolt c="w-5 h-5"/>} title="Todas las apuestas" extra={<span className="text-[11px] tf ml-auto">{ap.length} mercados</span>}>
+      <div className="grid sm:grid-cols-2 sm:gap-x-6">{ap.map((a,i)=><ApuestaRow key={i} a={a} cuotas={cuotas}/>)}</div>
+    </Sec>
+
+    {m.tiene_goles && <Sec icon={<Goal c="w-5 h-5"/>} title="Goles y marcadores">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+        <Stat label="xG local" value={m.xg.local} color="var(--primary)"/><Stat label="xG visit." value={m.xg.visitante} color="var(--secondary)"/><Stat label="Goles esp." value={m.xg.total}/>
+        <Stat label="Over 1.5" value={pctR(m.over_under["1.5"])} color={SEM.alta}/><Stat label="Over 2.5" value={pctR(m.over_under["2.5"])} color={SEM.media}/><Stat label="Over 3.5" value={pctR(m.over_under["3.5"])} color={SEM.baja}/>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div><div className="text-[10px] uppercase tracking-wide td mb-2">Marcadores más probables</div>
+          {m.marcadores.map((s,i)=><div key={i} className="flex items-center gap-2 mb-1.5"><span className="num text-xs t w-9">{s.marcador}</span><div className="flex-1"><Bar value={s.prob/m.marcadores[0].prob} color="var(--secondary)" delay={i*40}/></div><span className="num text-[11px] td w-10 text-right">{pct(s.prob)}</span></div>)}</div>
+        <div><div className="text-[10px] uppercase tracking-wide td mb-2">Otros mercados</div>
+          {[["Ambos equipos marcan",m.btts],["Over 2.5 goles",m.over_under["2.5"]]].map(([k,v],i)=><div key={i} className="flex items-center gap-2 mb-1.5"><span className="text-[11px] td flex-1">{k}</span><div className="w-24"><Bar value={v} color={probColor(v)}/></div><span className="num text-[11px] w-10 text-right" style={{color:probColor(v)}}>{pctR(v)}</span></div>)}
+          <div className="mt-3 card2 p-3"><div className="text-[10px] uppercase tracking-wide td mb-1 flex items-center gap-1"><Corner c="w-3 h-3"/>Córners (estimación)</div>
+            <div className="flex justify-around text-center"><div><div className="num font-bold acc">{m.corners.local}</div><div className="text-[9px] tf">{ev.local.split(' ')[0]}</div></div><div><div className="num font-bold t">{m.corners.total}</div><div className="text-[9px] tf">total</div></div><div><div className="num font-bold acc">{m.corners.visitante}</div><div className="text-[9px] tf">{ev.visitante.split(' ')[0]}</div></div></div></div>
+        </div>
+      </div>
+    </Sec>}
+
+    {!av ? <div className="h-32 skel"></div> : av.disponible ? <>
+      <Sec icon={<Flame c="w-5 h-5"/>} title="Forma reciente" extra={av.nota_forma&&<span className="text-[10px] tf ml-auto max-w-[50%] text-right">{av.nota_forma}</span>}>
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormaCol nom={ev.local} fm={av.forma_local} flag={ev.local_flag} logo={av.logo_local} resumen={av.resumen_local}/>
+          <FormaCol nom={ev.visitante} fm={av.forma_visitante} flag={ev.visitante_flag} logo={av.logo_visitante} resumen={av.resumen_visitante}/>
+        </div>
+      </Sec>
+      {(av.previo_local||av.previo_visitante||av.tendencia_local)&&<Sec icon={<Corner c="w-5 h-5"/>} title="Tendencia y último partido">
+        <div className="grid md:grid-cols-2 gap-4">{[[ev.local,av.previo_local,av.tendencia_local],[ev.visitante,av.previo_visitante,av.tendencia_visitante]].map(([nom,pv,td],i)=>
+          <div key={i} className="card2 p-3"><div className="text-sm font-medium t mb-1">{nom}</div>
+          {td&&<div className="flex gap-3 mb-2 text-[10px] td flex-wrap items-center"><span className="tf uppercase tracking-wide">Prom. últ. {td.n}:</span><span>córners <b className="t num">{td.corners!=null?td.corners:"-"}</b></span><span>tiros <b className="t num">{td.tiros!=null?td.tiros:"-"}</b></span><span>amarillas <b className="t num">{td.amarillas!=null?td.amarillas:"-"}</b></span></div>}
+          {pv?<><div className="text-[11px] td num mb-2">Último: {pv.fecha} · {pv.local} {pv.marcador} {pv.visitante}</div>
+            <div className="grid grid-cols-3 gap-2 mb-2"><Stat label="Córners" value={pv.corners!=null?pv.corners:"-"} color="var(--accent)"/><Stat label="Tiros" value={pv.tiros!=null?pv.tiros:"-"} color="var(--primary)"/><Stat label="Posesión" value={pv.posesion||"-"} color="var(--secondary)"/><Stat label="Amarillas" value={pv.amarillas!=null?pv.amarillas:"-"} color="#e3b860"/><Stat label="Faltas" value={pv.faltas!=null?pv.faltas:"-"} color="var(--dim)"/></div>
+            {pv.formacion&&<div className="text-[11px] td">Formación: <b className="num acc">{pv.formacion}</b></div>}
+            {pv.once&&pv.once.length>0&&<div className="text-[10px] tf mt-1 leading-relaxed">{pv.once.join(" · ")}</div>}
+          </>:<div className="text-[11px] tf">Sin datos del último partido.</div>}</div>)}</div>
+        <div className="text-[10px] tf mt-2">Datos del último partido jugado (referencia). Lesiones y alineación del partido a jugar no están en el plan gratuito.</div>
+      </Sec>}
+      <Sec icon={<Trophy c="w-5 h-5"/>} title="Historial directo (H2H)" extra={av.nota_h2h&&<span className="text-[10px] tf ml-auto max-w-[52%] text-right">{av.nota_h2h}</span>}>
+        {av.resumen_h2h&&av.resumen_h2h.total>0?<>
+          <div className="flex justify-around text-center mb-4">
+            <div><div className="num text-3xl font-bold" style={{color:SEM.alta}}>{av.resumen_h2h.g}</div><div className="text-[10px] tf">gana {ev.local}</div></div>
+            <div><div className="num text-3xl font-bold td">{av.resumen_h2h.e}</div><div className="text-[10px] tf">empates</div></div>
+            <div><div className="num text-3xl font-bold sec">{av.resumen_h2h.p}</div><div className="text-[10px] tf">gana {ev.visitante}</div></div>
+          </div>
+          <div className="space-y-1.5">{av.h2h.map((x,i)=><div key={i} className="flex items-center justify-between text-xs card2 px-3 py-2"><span className="tf shrink-0">{x.fecha}</span><span className="num t flex items-center gap-1.5"><Logo src={x.logo_local}/>{x.local} <b className="acc">{x.marcador}</b> {x.visitante}<Logo src={x.logo_visitante}/></span></div>)}</div>
+          {av.resumen_h2h.total<=2&&<div className="mt-3 text-[11px]" style={{color:SEM.media}}>Pocos enfrentamientos directos: la forma reciente de cada equipo es más informativa acá.</div>}
+        </>:<div className="text-sm tf">Sin enfrentamientos directos en el registro. Para equipos de distintas confederaciones suele ser normal — mirá la forma reciente.</div>}
+      </Sec>
+    </> : <div className="card p-4 text-sm td flex items-center gap-2"><Flame c="w-5 h-5 acc"/>{av.mensaje}</div>}
+
+    <button onClick={onVolver} className="flex items-center gap-2 text-sm td hover:text-[var(--text)] cursor-pointer chip px-3 py-2 rounded-xl w-fit mx-auto"><Back c="w-4 h-4"/>Volver al listado</button>
+  </div>;
+}
+
+// ===== TARJETA =====
+function Match({ev,cuotas,onAbrir,idx=0}){
+  const m=ev.modelo||{},conf=m.confianza,top=ev.apuestas.slice(0,3);
+  return <div className="card card-h p-4 reveal cursor-pointer relative overflow-hidden" style={{animationDelay:`${idx*35}ms`}} onClick={onAbrir}>
+    {conf&&<div className="absolute top-0 left-0 right-0" style={{height:3,background:probColor(conf.valor)}}></div>}
+    {ev.torneo && <div className="text-[9px] uppercase tracking-[0.13em] sec mb-2 text-center">{ev.torneo}</div>}
+    <div className="flex items-center gap-3">
+      <CrestImg nombre={ev.local} flag={ev.local_flag}/>
+      <div className="flex-1 min-w-0 text-center"><div className="display font-semibold text-sm t truncate">{ev.local} <span className="tf font-normal">vs</span> {ev.visitante}</div>
+        <div className="flex items-center justify-center gap-1.5 text-[11px] td num mt-0.5"><Clock c="w-3 h-3"/>{ev.hora}{m.favorito&&<><span className="tf">·</span><span className="acc">fav: {m.favorito}</span></>}</div></div>
+      <CrestImg nombre={ev.visitante} flag={ev.visitante_flag}/>
+    </div>
+    {m.probabilidades&&<div className="mt-3"><StrengthBar pr={m.probabilidades}/><div className="flex justify-between text-[10px] tf num mt-1"><span>{pctR(m.probabilidades.local)}</span>{m.probabilidades.empate!=null&&<span>X {pctR(m.probabilidades.empate)}</span>}<span>{pctR(m.probabilidades.visitante)}</span></div></div>}
+    <div className="flex items-center gap-3 mt-3">{conf&&<Ring value={conf.valor} color={probColor(conf.valor)} label={conf.nivel}/>}<div className="flex-1 divide-soft">{top.map((a,i)=><ApuestaRow key={i} a={a} cuotas={cuotas}/>)}</div></div>
+    <div className="mt-3 w-full text-center text-xs acc chip py-2 rounded-lg">Ver ficha completa →</div>
+  </div>;
+}
+function Calendario({dias,sel,onSel}){
+  const Pill=({active,children,onClick})=> <button onClick={onClick} className="pill shrink-0 rounded-xl cursor-pointer transition" style={active?{background:"var(--primary)",color:"var(--on-primary)",border:"1px solid var(--primary)"}:{background:"var(--chip)",color:"var(--dim)",border:"1px solid var(--border)"}}>{children}</button>;
+  return <div className="flex gap-2 overflow-x-auto pb-2">
+    <Pill active={sel==="todos"} onClick={()=>onSel("todos")}><div className="px-4 py-2.5"><div className="display font-semibold text-sm">Todos</div><div className="text-[10px] opacity-70">{dias.reduce((s,d)=>s+d.count,0)} part.</div></div></Pill>
+    {dias.map((d,i)=><Pill key={i} active={sel===d.fecha} onClick={()=>onSel(d.fecha)}><div className="w-[64px] py-2.5 text-center"><div className="text-[10px] uppercase opacity-70">{d.dia_corto}</div><div className="display text-xl font-bold leading-none my-0.5">{d.num}</div><div className="text-[10px] opacity-70">{d.mes}</div><div className="text-[9px] mt-1 opacity-80">{d.count} p.</div></div></Pill>)}
+  </div>;
+}
+function Combi({c,perfil,cuotas,monto}){const P=pf(perfil);const gan=Math.round((c.cuota-1)*monto);return <div className="card card-h p-4">
+  <div className="flex items-center justify-between mb-3"><div><div className="num text-3xl font-bold" style={{color:P.c}}><Ticker value={c.prob*100}/></div><div className="text-[10px] tf uppercase">prob. de acertar todo</div></div>{cuotas&&<div className="text-right"><div className="num text-lg font-bold acc">@{cuotaFmt(c.cuota)}</div><div className="text-[10px] tf">cuota total · {c.patas.length} patas</div></div>}</div>
+  {cuotas&&<div className="card2 p-2.5 mb-3 flex items-center justify-between"><span className="text-[11px] td">Apostás <b className="t num">${monto}</b></span><span className="num text-sm font-bold" style={{color:P.c}}>→ +${gan}</span></div>}
+  <div className="space-y-2">{c.patas.map((p,i)=><div key={i} className="flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{background:P.c}}></span><div className="flex-1 min-w-0"><div className="text-xs t">{p.seleccion}</div><div className="text-[10px] tf">{p.partido} · {pctR(p.prob)}{cuotas?` · @${cuotaFmt(p.cuota)}`:""}</div></div></div>)}</div></div>;}
+function Opt({active,onClick,children}){
+  return <button onClick={onClick} className="dditem w-full text-left px-2.5 py-1.5 rounded-lg text-sm cursor-pointer" style={active?{background:"var(--primary)",color:"var(--on-primary)"}:{color:"var(--text)",background:"transparent"}} onMouseEnter={e=>{if(!active)e.currentTarget.style.background="var(--chip)";}} onMouseLeave={e=>{if(!active)e.currentTarget.style.background="transparent";}}>{children}</button>;
+}
+function Dropdown({label,value,onChange,groups,options}){
+  const [open,setOpen]=useState(false); const ref=useRef();
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};document.addEventListener('mousedown',h);return ()=>document.removeEventListener('mousedown',h);},[]);
+  let current="";
+  if(groups){for(const g of groups)for(const o of g.categorias)if(o.clave===value)current=o.nombre;}
+  else if(options){const o=options.find(x=>x[0]==value);current=o?o[1]:value;}
+  return <div ref={ref} className="relative flex flex-col gap-1">
+    <span className="text-[10px] uppercase tracking-wide tf">{label}</span>
+    <button onClick={()=>setOpen(o=>!o)} className="inp px-3 py-2 text-sm flex items-center justify-between gap-3 cursor-pointer min-w-[160px]"><span className="t truncate">{current}</span><Chev c={`w-4 h-4 td transition-transform ${open?"rotate-180":""}`}/></button>
+    {open&&<div className="ddpanel absolute top-full mt-1 left-0 z-50 w-full min-w-[215px] max-h-[340px] overflow-auto p-1">
+      {groups?groups.map(g=><div key={g.grupo}><div className="px-2 py-1 text-[10px] uppercase tracking-wide sec font-semibold">{g.grupo}</div>{g.categorias.map(o=><Opt key={o.clave} active={o.clave===value} onClick={()=>{onChange(o.clave);setOpen(false);}}>{o.nombre}</Opt>)}</div>)
+        :options.map(o=><Opt key={o[0]} active={o[0]==value} onClick={()=>{onChange(o[0]);setOpen(false);}}>{o[1]}</Opt>)}
+    </div>}
+  </div>;
+}
+
+function NavSec({active,onClick,icon,titulo,desc,dv,dl,color}){
+  return <div className="relative">
+    <div className="absolute inset-0 rounded-[18px] pointer-events-none transition-all duration-300" style={{background:color,filter:"blur(20px)",opacity:active?.32:.13,transform:active?"scale(.95)":"scale(.88)"}}></div>
+    <button onClick={onClick} className="card text-left p-4 cursor-pointer transition relative overflow-hidden w-full"
+      style={active?{borderColor:color,boxShadow:`0 0 0 1.5px ${color}, 0 16px 42px -16px ${color}`,background:`color-mix(in srgb, ${color} 10%, var(--surface))`,transform:"translateY(-2px)"}:{opacity:.62}}>
+      <div className="absolute top-0 left-0 right-0" style={{height:4,background:active?color:"transparent"}}></div>
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-xl grid place-items-center shrink-0 transition" style={{background:`color-mix(in srgb, ${color} ${active?36:14}%, transparent)`,color}}>{icon}</div>
+        <div className="flex-1 min-w-0"><div className="display font-semibold t leading-tight flex items-center gap-1.5">{titulo}{active&&<span className="w-1.5 h-1.5 rounded-full" style={{background:color,boxShadow:`0 0 6px ${color}`}}></span>}</div><div className="text-[11px] tf leading-tight">{desc}</div></div>
+        <div className="text-right shrink-0"><div className="num text-2xl font-bold" style={{color}}>{dv}</div><div className="text-[9px] tf uppercase tracking-wide">{dl}</div></div>
+      </div>
+    </button>
+  </div>;
+}
+function PageHeader({icon,titulo,desc,color}){
+  return <div className="flex items-start gap-3 mb-4 reveal"><div className="w-12 h-12 rounded-2xl grid place-items-center shrink-0" style={{background:`color-mix(in srgb, ${color} 20%, transparent)`,color}}>{icon}</div>
+    <div><h2 className="display text-2xl font-bold t leading-tight">{titulo}</h2><p className="text-xs td mt-0.5 max-w-2xl">{desc}</p></div></div>;
+}
+function App(){
+  const [grupos,setGrupos]=useState([]); const [categoria,setCategoria]=useState("futbol");
+  const [dias,setDias]=useState(14); const [patas,setPatas]=useState(3);
+  const [cuotas,setCuotas]=useState(true); const [tab,setTab]=useState("dia"); const [monto,setMonto]=useState("100");
+  const [diaSel,setDiaSel]=useState("todos"); const [data,setData]=useState(null);
+  const [load,setLoad]=useState(false); const [ficha,setFicha]=useState(null);
+  const [tema,setTema]=useState(()=>{try{return localStorage.getItem('betlab-theme')||'dark';}catch(e){return 'dark';}});
+  useEffect(()=>{document.documentElement.setAttribute('data-theme',tema);try{localStorage.setItem('betlab-theme',tema);}catch(e){}},[tema]);
+  useEffect(()=>{ fetch(API+"/api/categorias").then(r=>r.json()).then(d=>setGrupos(d.grupos||[])); },[]);
+  const cargar=useCallback((f=false)=>{ setLoad(true); fetch(`${API}/api/analizar?categoria=${categoria}&dias=${dias}&patas=${patas}&forzar=${f?1:0}`).then(r=>r.json()).then(d=>{setData(d);setDiaSel("todos");setLoad(false);}).catch(()=>setLoad(false)); },[categoria,dias,patas]);
+  useEffect(()=>{ cargar(false); },[cargar]);
+
+  if(ficha) return <PartidoPage ev={ficha} categoria={categoria} cuotas={cuotas} onVolver={()=>setFicha(null)}/>;
+  const meta=data?.meta;
+  const fuente={vivo:["EN VIVO",SEM.alta],cache:["CACHÉ","var(--secondary)"],cache_viejo:["CACHÉ VIEJO",SEM.media],demo:["DEMO","var(--faint)"],error:["ERROR",SEM.baja]}[meta?.fuente]||["",""];
+  const principal=data?.mejores_simples?.[0];
+  const diasMostrar=data?(diaSel==="todos"?data.por_dia:data.por_dia.filter(d=>d.fecha===diaSel)):[];
+  const totalCombis=data?Object.values(data.combinadas).reduce((s,a)=>s+a.length,0):0;
+
+  return <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <header className="flex items-center justify-between flex-wrap gap-3 mb-5 reveal">
+      <div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl btnp grid place-items-center"><Bolt c="w-6 h-6"/></div>
+        <div><h1 className="display text-2xl font-bold t leading-none">Bet<span className="acc">Lab</span></h1><p className="text-[11px] tf mt-0.5">terminal de análisis · probabilidades reales · combinadas</p></div></div>
+      <div className="flex items-center gap-2">
+        {meta&&<span className="text-[10px] px-2.5 py-1.5 rounded-full chip num" style={{color:fuente[1]}}>● {fuente[0]}{meta.edad_horas!=null?` ${meta.edad_horas}h`:""}</span>}
+        {meta?.creditos_restantes!=null&&<span className="text-[10px] px-2.5 py-1.5 rounded-full chip td num">{meta.creditos_restantes} créd.</span>}
+        <button onClick={()=>setTema(tema==="dark"?"light":"dark")} title="Cambiar tema" className="chip w-9 h-9 grid place-items-center rounded-xl cursor-pointer td hover:text-[var(--text)]">{tema==="dark"?<Sun c="w-4 h-4"/>:<Moon c="w-4 h-4"/>}</button>
+        <button onClick={()=>cargar(true)} disabled={load} className="btnp flex items-center gap-1.5 disabled:opacity-50 text-sm px-4 py-2 rounded-xl cursor-pointer"><Refresh c={`w-4 h-4 ${load?"spin":""}`}/>Actualizar</button>
+      </div>
+    </header>
+
+    <div className="card p-4 mb-4 flex flex-wrap items-center gap-3 reveal" style={{position:"relative",zIndex:40}}>
+      <Dropdown label="Categoría" value={categoria} onChange={setCategoria} groups={grupos}/>
+      <label className="flex items-center gap-2 text-sm td cursor-pointer ml-auto self-end pb-1"><input type="checkbox" checked={cuotas} onChange={e=>setCuotas(e.target.checked)} style={{accentColor:"var(--primary)"}} className="w-4 h-4"/>Mostrar cuotas</label>
+    </div>
+    {meta?.mensaje&&<p className="text-[11px] td mb-2 px-1">{meta.mensaje}</p>}
+    {data?.aviso_horizonte&&<div className="text-[11px] card p-3 mb-3" style={{color:SEM.media}}>⚠ {data.aviso_horizonte}</div>}
+
+    {data&&(principal||data.kpis)&&<div className="grid lg:grid-cols-3 gap-4 mb-4">
+      {principal&&<div className="card p-5 reveal lg:col-span-2 flex items-center justify-between flex-wrap gap-4">
+        <div><div className="text-[11px] uppercase tracking-[0.18em] mb-1 flex items-center gap-1" style={{color:SEM.alta}}><Target c="w-3.5 h-3.5"/>Apuesta más segura del periodo</div>
+          <div className="display text-2xl font-bold t">{principal.partido}</div><div className="td text-sm">{principal.seleccion} <span className="tf">· {principal.mercado}</span></div>
+          {data.kpis?.top_confianza&&<div className="text-[11px] tf mt-2">Mayor confianza: <b className="acc">{data.kpis.top_confianza.partido}</b> ({pctR(data.kpis.top_confianza.valor)})</div>}</div>
+        <div className="text-right"><div className="num text-5xl font-bold" style={{color:SEM.alta}}><Ticker value={principal.prob*100}/></div>{cuotas&&<div className="num text-sm acc mt-1">cuota @ {cuotaFmt(principal.cuota)}</div>}</div>
+      </div>}
+      {data.kpis&&<div className="grid grid-cols-2 gap-3 reveal">
+        <Kpi label="Partidos" value={data.kpis.partidos} color="var(--secondary)"/>
+        <Kpi label="Muy seguros" value={data.kpis.partidos_seguros} sub="confianza ≥ 75%" color={SEM.alta}/>
+        <Kpi label="Mejor combinada" value={data.kpis.mejor_combi!=null?pctR(data.kpis.mejor_combi):"—"} color="var(--primary)"/>
+        <Kpi label="Días con partidos" value={data.dias_disponibles} color="var(--accent)"/>
+      </div>}
+    </div>}
+
+    {data&&<div className="grid sm:grid-cols-3 gap-3 mb-5">
+      <NavSec active={tab==="dia"} onClick={()=>setTab("dia")} icon={<Cal c="w-5 h-5"/>} titulo="Por día" desc="Explorá partido por partido" dv={data.n_eventos} dl="partidos" color="var(--secondary)"/>
+      <NavSec active={tab==="combinadas"} onClick={()=>setTab("combinadas")} icon={<Layers c="w-5 h-5"/>} titulo="Combinadas" desc="Armadas por perfil de riesgo" dv={totalCombis} dl="opciones" color="var(--primary)"/>
+      <NavSec active={tab==="valor"} onClick={()=>setTab("valor")} icon={<Bolt c="w-5 h-5"/>} titulo="Mejor valor" desc="Mayor valor esperado" dv={(data.mejores_valor||[]).length} dl="picks" color="var(--accent)"/>
+    </div>}
+
+    {load&&!data?<div className="text-center tf py-20 display">Calculando…</div>:
+     data&&data.n_eventos===0?<div className="card p-12 text-center"><div className="display text-lg td">No hay partidos para {meta?.categoria_nombre}</div><div className="text-sm tf mt-1">Probá otra categoría o "Todo el fútbol".</div></div>:
+     data?<>
+       {tab==="dia"&&<div key="dia">
+         <PageHeader icon={<Cal c="w-6 h-6"/>} titulo="Por día" desc="Todos los partidos del período, día por día. Tocá cualquier partido para abrir su ficha completa con análisis." color="var(--secondary)"/>
+         {data.calendario?.length>0&&<div className="mb-5"><Calendario dias={data.calendario} sel={diaSel} onSel={setDiaSel}/></div>}
+         {diasMostrar.map((d,i)=><div key={i} className="mb-8"><div className="flex items-center gap-2 mb-3"><Cal c="w-4 h-4 pri"/><h3 className="display text-sm font-semibold uppercase tracking-wide td">{d.titulo}</h3><span className="text-xs tf">· {d.eventos.length} partido(s)</span></div>
+           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{d.eventos.map((ev,j)=><Match key={j} ev={ev} cuotas={cuotas} idx={j} onAbrir={()=>setFicha(ev)}/>)}</div></div>)}</div>}
+       {tab==="combinadas"&&<div key="comb">
+         <PageHeader icon={<Layers c="w-6 h-6"/>} titulo="Combinadas" desc="Varias apuestas en un solo ticket. Ojo: más patas = más pago, pero MENOS probabilidad de acertar todo." color="var(--primary)"/>
+         <div className="card p-3 mb-4 flex flex-wrap items-end gap-3" style={{position:"relative",zIndex:30}}>
+           <Dropdown label="Horizonte" value={dias} onChange={v=>setDias(+v)} options={[[7,"1 semana"],[14,"2 semanas"],[21,"3 semanas"],[28,"4 semanas"]]}/>
+           <Dropdown label="Patas por combinada" value={patas} onChange={v=>setPatas(+v)} options={[[2,"2 patas"],[3,"3 patas"],[4,"4 patas"]]}/>
+           <label className="flex flex-col gap-1"><span className="text-[10px] uppercase tracking-wide tf">Monto a apostar</span><div className="relative" style={{width:130}}><span className="absolute left-3 top-1/2 -translate-y-1/2 tf text-sm pointer-events-none">$</span><input type="text" inputMode="numeric" value={monto} onChange={e=>setMonto(e.target.value.replace(/\D/g,"").slice(0,7))} placeholder="100" className="inp pl-6 pr-3 py-2 text-sm num w-full"/></div></label>
+           <span className="text-[11px] tf ml-auto self-center">Estos filtros aplican solo a las combinadas</span></div>
+         <div className="grid gap-5 lg:grid-cols-3">{[["conservador","Conservadoras","máxima seguridad"],["moderado","Moderadas","equilibrio"],["agresivo","Agresivas","más pago, más riesgo"]].map(([k,t,s])=>{const P=pf(k),lista=data.combinadas[k]||[];return <div key={k}><div className="flex items-center gap-2 mb-3"><span className="text-xs px-3 py-1 rounded-full" style={{color:P.c,background:P.c+"1f",border:`1px solid ${P.c}55`}}>{t}</span><span className="text-[11px] tf">{s}</span></div><div className="space-y-3">{lista.length?lista.map((c,i)=><Combi key={i} c={c} perfil={k} cuotas={cuotas} monto={+monto||0}/>):<div className="card p-4 text-xs tf">Sin combinadas para este perfil.</div>}</div></div>;})}</div>
+       </div>}
+       {tab==="valor"&&<div key="val">
+         <PageHeader icon={<Bolt c="w-6 h-6"/>} titulo="Mejor valor" desc="Apuestas donde la cuota paga MÁS que la probabilidad real (★ valor = EV positivo). Si no aparece ningún ★, hoy no hay chollos claros." color="var(--accent)"/>
+         {!data.mejores_valor.some(a=>a.valor)&&<div className="card p-3 mb-4 text-[12px] td" style={{borderLeft:`3px solid ${SEM.media}`}}>Hoy no hay apuestas con valor positivo claro (es lo normal: las casas ajustan bien). Igual te muestro las de mejor relación probabilidad/cuota.</div>}
+         <div className="grid gap-3 md:grid-cols-2">{data.mejores_valor.map((a,i)=><div key={i} className="card card-h p-4 flex items-center justify-between"><div className="flex-1 min-w-0 pr-3"><div className="text-sm t flex items-center gap-2 flex-wrap">{a.seleccion}{a.valor&&<span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{color:SEM.alta,background:SEM.alta+"22",border:`1px solid ${SEM.alta}66`}}>★ valor</span>}</div><div className="text-[11px] tf">{a.partido} · {a.mercado}</div><div className="mt-2"><Bar value={a.prob} color={probColor(a.prob)}/></div></div><div className="text-right shrink-0"><div className="num text-lg font-bold" style={{color:probColor(a.prob)}}>{pctR(a.prob)}</div><div className="num text-[11px]" style={{color:a.ev>=0?SEM.alta:"var(--faint)"}}>EV {evFmt(a.ev)}</div>{cuotas&&<div className="num text-[11px] acc">@{cuotaFmt(a.cuota)}</div>}</div></div>)}</div>
+       </div>}
+     </>:null}
+
+    <footer className="mt-12 pt-6 text-[11px] tf space-y-1" style={{borderTop:"1px solid var(--border)"}}><p><b className="td">Recordá:</b> una combinada de N patas es siempre MENOS probable que cualquiera de sus patas sueltas. Lo más seguro es la apuesta simple.</p><p>Análisis estadístico con fines informativos. No es garantía. Apostá solo lo que puedas permitirte perder. +18. Córners = estimación del modelo.</p></footer>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

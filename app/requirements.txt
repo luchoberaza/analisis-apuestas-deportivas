@@ -1,0 +1,9 @@
+# La app NO necesita librerías externas: usa solo la librería estándar de Python.
+# (urllib para las peticiones, datetime, math, etc.)
+#
+# Requisito: Python 3.10 o superior.
+#
+# Si en el futuro quieres usar pandas/scipy para análisis más avanzado,
+# descomenta lo siguiente:
+# pandas>=2.0
+# scipy>=1.10
